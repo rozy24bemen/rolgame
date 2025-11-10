@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: rol-api
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://rol:devpass@db:5432/rol?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "${API_PORT:-4000}"
+    command: sh -c "npm run prisma:deploy && node dist/index.js"
+    networks:
+      - rolnet
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.prod
+    container_name: rol-web
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    networks:
+      - rolnet
+
+  db:
+    image: postgres:16-alpine
+    container_name: rol-db
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devpass}
+      - POSTGRES_USER=${POSTGRES_USER:-rol}
+      - POSTGRES_DB=${POSTGRES_DB:-rol}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - rolnet
+
+volumes:
+  pgdata:
+
+networks:
+  rolnet:
+    driver: bridge

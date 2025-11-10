@@ -1,0 +1,15 @@
+{
+  "name": "etl-azgaar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "etl-azgaar": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
+  }
+}

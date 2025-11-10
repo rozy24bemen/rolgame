@@ -1,0 +1,155 @@
+# GraphQL SDL — Esquema base para Panel de Facciones e Inspector
+
+scalar JSON
+
+enum ObjectiveStatus { PLANNED ACTIVE BLOCKED DONE }
+
+type ObjectiveNode {
+  id: ID!
+  title: String!
+  status: ObjectiveStatus!
+  children: [ObjectiveNode!]
+}
+
+type Relation {
+  stateId: ID!
+  attitude: Int!
+  tradeVolume: Float
+}
+
+type LLMStatus {
+  enabled: Boolean!
+  decisionsPerEra: Int!
+  remainingQuota: Int!
+}
+
+type Alert {
+  type: String!
+  severity: String!
+  message: String!
+}
+
+type FactionSummary {
+  id: ID!
+  name: String!
+  cultureId: ID
+  treasury: Float!
+  stability: Float!
+  territories: Int!
+  militaryStrength: Int!
+  relations: [Relation!]!
+  objectives: [ObjectiveNode!]!
+  llmStatus: LLMStatus!
+  alerts: [Alert!]
+}
+
+type Composition {
+  inf: Int!
+  cav: Int!
+  arty: Int!
+}
+
+type Order {
+  kind: String!
+  etaTick: Int
+  pathLen: Int
+}
+
+type Army {
+  id: ID!
+  stateId: ID!
+  locationCellId: Int!
+  strength: Int!
+  supply: Int!
+  stance: String!
+  composition: Composition!
+  orders: [Order!]
+}
+
+type SettlementTradeLink {
+  toSettlementId: ID!
+  volume: Float!
+}
+
+type Settlement {
+  id: ID!
+  name: String!
+  cellId: Int!
+  pop: Float!
+  marketTier: Int!
+  garrison: Int!
+  ownerStateId: ID!
+  tradeLinks: [SettlementTradeLink!]!
+}
+
+type Cell {
+  id: Int!
+  q: Int
+  r: Int
+  biome: Int
+  height: Int
+  passable: Boolean
+  movementCost: Int
+  stateId: ID
+  provinceId: ID
+  cultureId: ID
+}
+
+type FactionDetail {
+  id: ID!
+  name: String!
+  cultureId: ID
+  treasury: Float!
+  stability: Float!
+  relations: [Relation!]!
+  objectives: [ObjectiveNode!]!
+  armies: [Army!]!
+  settlements: [Settlement!]!
+  llmStatus: LLMStatus!
+}
+
+type TickInfo { tick: Int!, season: String }
+
+type Query {
+  tickInfo: TickInfo!
+  factions(filter: String, page: Int = 1, pageSize: Int = 20): [FactionSummary!]!
+  faction(id: ID!): FactionDetail
+  cell(id: Int!): Cell
+  settlement(id: ID!): Settlement
+  army(id: ID!): Army
+  tickMetrics(stateId: ID, metricKey: String, fromTick: Int, toTick: Int, limit: Int = 10): [TickMetric!]!
+  narrativeEvents(stateId: ID, fromTick: Int, toTick: Int, limit: Int = 20): [NarrativeEvent!]!
+}
+
+type WorldUpdate {
+  type: String! # 'army-move' | 'battle' | 'demographic' | 'event'
+  ids: [ID!]!
+  bbox: JSON
+  tick: Int!
+}
+
+type Subscription {
+  factionUpdates: FactionSummary!
+  objectivesUpdates(factionId: ID!): [ObjectiveNode!]!
+  worldUpdates(viewport: JSON): WorldUpdate!
+}
+
+# Metrics for tuning and debugging
+type TickMetric {
+  id: ID!
+  tick: Int!
+  stateId: ID
+  systemType: String!
+  metricKey: String!
+  value: Float!
+  createdAt: String!
+}
+
+# Narrative feed entries persisted by Event System or other subsystems
+type NarrativeEvent {
+  id: ID!
+  tick: Int!
+  stateId: ID
+  text: String!
+  createdAt: String!
+}

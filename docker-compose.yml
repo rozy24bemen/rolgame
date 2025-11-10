@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: rol-api
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://rol:devpass@db:5432/rol?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "4000"
+    command: sh -c "npm run prisma:push && npm run prisma:seed && node dist/index.js"
+    networks:
+      - rolnet
+
+  web:
+    image: node:20-alpine
+    container_name: rol-web
+    working_dir: /usr/src/app
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - VITE_USE_MOCK=false
+      - VITE_API_BASE=
+    command: sh -c "npm ci && cd apps/web && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./:/usr/src/app
+    networks:
+      - rolnet
+
+  proxy:
+    image: nginx:alpine
+    container_name: rol-proxy
+    depends_on:
+      - api
+      - web
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - rolnet
+
+  db:
+    image: postgres:16-alpine
+    container_name: rol-db
+    environment:
+      - POSTGRES_PASSWORD=devpass
+      - POSTGRES_USER=rol
+      - POSTGRES_DB=rol
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - rolnet
+
+volumes:
+  pgdata:
+
+networks:
+  rolnet:
+    driver: bridge

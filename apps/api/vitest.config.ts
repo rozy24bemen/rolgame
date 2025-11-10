@@ -1,0 +1,15 @@
+import { defineConfig } from 'vitest/config'
+import path from 'path'
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+  resolve: {
+    alias: {
+      'sim-core': path.resolve(__dirname, '../../services/sim-core/dist/index.js'),
+      'llm-proxy': path.resolve(__dirname, '../../services/llm-proxy/dist/index.js'),
+      'etl-azgaar': path.resolve(__dirname, '../../services/etl-azgaar/dist/index.js'),
+    },
+  },
+})

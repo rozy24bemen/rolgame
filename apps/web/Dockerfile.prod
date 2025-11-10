@@ -1,0 +1,27 @@
+# Build stage
+FROM node:20-alpine AS build
+WORKDIR /usr/src/app
+
+# Install web dependencies
+COPY apps/web/package*.json apps/web/
+RUN cd apps/web && npm ci
+
+# Copy sources needed for build
+COPY apps/web apps/web
+COPY packages/sdk packages/sdk
+COPY packages/schema packages/schema
+
+# Build static assets
+RUN cd apps/web && npm run build
+
+# Runtime stage (nginx)
+FROM nginx:alpine AS runtime
+
+# Nginx config to serve static and proxy API/GraphQL to api service
+COPY apps/web/docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built assets
+COPY --from=build /usr/src/app/apps/web/dist /usr/share/nginx/html
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
