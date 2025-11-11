@@ -16,6 +16,20 @@ const WorldPanel: React.FC<WorldPanelProps> = ({ tick, sseCount, logs }) => {
   }, [tick])
   const healthVals = useMemo(() => (globalHealth.data ?? []).slice().reverse().map((m: any) => m.value), [globalHealth.data])
   const latestHealth = (globalHealth.data?.[0]?.value as number) ?? undefined
+
+  // Global risk intensity (war casualties over last 5 ticks normalized by total strength)
+  const globalRisk = useReactiveQuery(async () => {
+    return await queries.getGlobalTickMetrics({ metricKey: 'global_risk_intensity', limit: 20 })
+  }, [tick])
+  const riskVals = useMemo(() => (globalRisk.data ?? []).slice().reverse().map((m: any) => m.value), [globalRisk.data])
+  const latestRisk = (globalRisk.data?.[0]?.value as number) ?? undefined
+  const riskLabelClass = latestRisk === undefined
+    ? 'text-gray-400'
+    : latestRisk < 0.02
+      ? 'text-green-400'
+      : latestRisk < 0.08
+        ? 'text-yellow-300'
+        : 'text-red-400'
   return (
     <div className="bg-gray-800 p-4 rounded-lg">
       <h2 className="font-semibold mb-2">Mundo</h2>
@@ -32,6 +46,18 @@ const WorldPanel: React.FC<WorldPanelProps> = ({ tick, sseCount, logs }) => {
           {globalHealth.error && <span className="text-red-400">{String(globalHealth.error)}</span>}
           {!globalHealth.loading && !globalHealth.error && (
             <span>Gap promedio actual: <span className="font-semibold">{latestHealth?.toFixed(2) ?? '—'}</span></span>
+          )}
+        </div>
+      </div>
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold mb-1 flex items-center justify-between">Global Risk Intensity
+          <span className="inline-block align-middle"><Sparkline values={riskVals} width={140} height={28} stroke="#f97316" /></span>
+        </h3>
+        <div className="text-xs text-gray-300">
+          {globalRisk.loading && <span className="text-gray-500">Cargando…</span>}
+          {globalRisk.error && <span className="text-red-400">{String(globalRisk.error)}</span>}
+          {!globalRisk.loading && !globalRisk.error && (
+            <span>Riesgo actual: <span className={"font-semibold " + riskLabelClass}>{latestRisk !== undefined ? latestRisk.toFixed(3) : '—'}</span></span>
           )}
         </div>
       </div>
