@@ -81,3 +81,25 @@ beforeEach(async () => {
   },
   10000
 )
+
+;(hasDb ? test : test.skip)(
+  'AI proposes ceasefire when casualties are high and treasury is low',
+  async () => {
+    // Two states at war; one has low treasury and suffered recent casualties
+    await prisma.state.create({ data: { id: 'CFA', name: 'CeaseA', treasury: 150, stability: 50, territories: 0, militaryStrength: 40, llmEnabled: true, isLlmControlled: true } })
+    await prisma.state.create({ data: { id: 'CFB', name: 'CeaseB', treasury: 1000, stability: 50, territories: 0, militaryStrength: 60, llmEnabled: false, isLlmControlled: false } })
+    // Active conflict between A and B
+    await prisma.conflict.create({ data: { aggressorStateId: 'CFA', defenderStateId: 'CFB', status: 'ACTIVE', startTick: 1 } })
+    // Recent casualties for CFA at prior ticks
+    await prisma.tickMetric.create({ data: { tick: 4, stateId: 'CFA', systemType: 'war', metricKey: 'war_casualties', value: 6 } })
+    await prisma.tickMetric.create({ data: { tick: 5, stateId: 'CFA', systemType: 'war', metricKey: 'war_casualties', value: 2 } })
+    const tick = 6
+    await runDecisionSystem(prisma, null, tick)
+
+    const c = await prisma.conflict.findFirst({ where: { OR: [{ aggressorStateId: 'CFA' }, { defenderStateId: 'CFA' }] } })
+    expect(c?.status).toBe('CEASEFIRE')
+    const ev = await prisma.narrativeEvent.findFirst({ where: { stateId: 'CFA', tick } })
+    expect(ev?.text).toContain('cese al fuego')
+  },
+  15000
+)

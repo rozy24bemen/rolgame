@@ -2,6 +2,13 @@ export type DecisionContext = {
   stateId: string
   tick: number
   situation?: string
+  econLow?: boolean
+  inWar?: boolean
+  recentLosses?: number
+  hostileAvg?: number
+  weakerThanHostiles?: boolean
+  casualtiesRatio?: number
+  treasury?: number
 }
 
 export type DecisionResult = {
@@ -20,28 +27,22 @@ export type NarrativeEventInput = {
 
 export class LlmProxy {
   async generateDecision(ctx: DecisionContext): Promise<DecisionResult> {
-    // Mock a structured decision; in real impl, call LLM and parse JSON
-    if (Math.random() < 0.5) {
-      // Recruitment action
-      const amount = Math.floor(Math.random() * 50) + 10; // strength units
+    // Ceasefire high-priority heuristic: heavy losses & low treasury & currently in war
+    if (ctx.inWar && ctx.casualtiesRatio !== undefined && ctx.casualtiesRatio > 0.1 && typeof ctx.treasury === 'number' && ctx.treasury < 300) {
       return {
-        action: 'RecruitUnits',
-        target: 'military',
-        amount,
-        confidence: 0.7 + Math.random() * 0.2,
-        rationale: `Reclutar ${amount} de fuerza militar para ${ctx.stateId} en tick ${ctx.tick}.`,
-      }
-    } else {
-      const negative = Math.random() < 0.5
-      const amount = (Math.floor(Math.random() * 500) + 250) * (negative ? -1 : 1)
-      return {
-        action: 'AdjustSpending',
-        target: 'military',
-        amount,
-        confidence: 0.7 + Math.random() * 0.2,
-        rationale: `Ajustar gasto ${negative ? 'reduciendo' : 'aumentando'} en ${Math.abs(amount)} para ${ctx.stateId} en tick ${ctx.tick}.`,
+        action: 'ProposeCeasefire',
+        confidence: 0.85,
+        rationale: `Pérdidas elevadas (${(ctx.casualtiesRatio*100).toFixed(1)}%) y tesorería baja (${ctx.treasury}). Proponer cese al fuego para ${ctx.stateId}.`,
       }
     }
+    // Mock other structured decision; in real impl, call LLM
+    if (Math.random() < 0.5) {
+      const amount = Math.floor(Math.random() * 50) + 10;
+      return { action: 'RecruitUnits', target: 'military', amount, confidence: 0.7 + Math.random() * 0.2, rationale: `Reclutar ${amount} de fuerza militar para ${ctx.stateId} en tick ${ctx.tick}.` }
+    }
+    const negative = Math.random() < 0.5;
+    const amount = (Math.floor(Math.random() * 500) + 250) * (negative ? -1 : 1);
+    return { action: 'AdjustSpending', target: 'military', amount, confidence: 0.7 + Math.random() * 0.2, rationale: `Ajustar gasto ${negative ? 'reduciendo' : 'aumentando'} en ${Math.abs(amount)} para ${ctx.stateId} en tick ${ctx.tick}.` }
   }
 
   async generateNarrative(ev: NarrativeEventInput): Promise<string> {

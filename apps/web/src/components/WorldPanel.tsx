@@ -32,6 +32,13 @@ const WorldPanel: React.FC<WorldPanelProps> = ({ tick, sseCount, logs }) => {
         : 'text-red-400'
   return (
     <div className="bg-gray-800 p-4 rounded-lg">
+      {/* Proactive global risk alert banner */}
+      {!globalRisk.loading && !globalRisk.error && latestRisk !== undefined && latestRisk > 0.08 && (
+        <div className="mb-3 p-3 rounded bg-red-900 text-red-200 border border-red-600">
+          <div className="text-sm font-semibold">Alta Intensidad de Riesgo Global</div>
+          <div className="text-xs">El mundo está experimentando una escalada significativa de conflictos. Considera medidas diplomáticas.</div>
+        </div>
+      )}
       <h2 className="font-semibold mb-2">Mundo</h2>
       <div className="flex items-center gap-4 text-sm mb-3 text-gray-300">
         <div>Tick: <span className="font-semibold text-blue-400">{tick}</span></div>

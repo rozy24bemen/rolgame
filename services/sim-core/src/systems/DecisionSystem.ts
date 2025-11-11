@@ -17,7 +17,7 @@ export async function runDecisionSystem(prisma: any, llm: any, tick: number, con
     });
 
     // Gather war context: active conflicts + recent casualties
-    const activeConflicts = await prisma.conflict.count({ where: { status: 'ACTIVE' } });
+  const activeConflicts = await prisma.conflict.count({ where: { status: 'ACTIVE' } });
     const recentCas = await prisma.tickMetric.findMany({
       where: { systemType: 'war', metricKey: 'war_casualties', tick: { gte: tick - 5 } },
       select: { tick: true, value: true, stateId: true },
@@ -44,16 +44,23 @@ export async function runDecisionSystem(prisma: any, llm: any, tick: number, con
     for (const st of llmStates) {
       let decision: any;
       const econLow = st.treasury < 200;
-      const inWar = activeConflicts > 0; // global war presence (could refine to per-state later)
+      const inWar = activeConflicts > 0; // global war presence (coarse)
       const recentLosses = casualtiesByState[st.id] || 0;
       const hostileAvg = await computeHostileAverage(st.id, (st.relations as any[]) || []);
       const weakerThanHostiles = hostileAvg > 0 && st.militaryStrength < hostileAvg;
+      // Per-state conflict info for diplomatic actions
+      const conflictsForState: Array<{ id: string; aggressorStateId: string; defenderStateId: string; status: string }> = await prisma.conflict.findMany({ where: { status: 'ACTIVE', OR: [{ aggressorStateId: st.id }, { defenderStateId: st.id }] }, select: { id: true, aggressorStateId: true, defenderStateId: true, status: true } });
+      const inWarForState = conflictsForState.length > 0;
+      const casualtiesBase = st.militaryStrength + recentLosses;
+      const casualtiesRatio = casualtiesBase > 0 ? (recentLosses / casualtiesBase) : 0;
 
       if (llm && typeof llm.generateDecision === 'function') {
-        decision = await llm.generateDecision({ stateId: st.id, tick, econLow, inWar, recentLosses, hostileAvg, weakerThanHostiles });
+        decision = await llm.generateDecision({ stateId: st.id, tick, econLow, inWar: inWarForState, recentLosses, hostileAvg, weakerThanHostiles, casualtiesRatio, treasury: st.treasury });
       } else {
         // Fallback heuristic AI
-        if (inWar && econLow) {
+        if (inWarForState && casualtiesRatio > 0.1 && st.treasury < 300) {
+          decision = { action: 'ProposeCeasefire', confidence: 0.85, rationale: 'Altas bajas y tesorería baja; proponer cese al fuego', target: null };
+        } else if (inWar && econLow) {
           decision = { action: 'AdjustSpending', amount: 50, confidence: 0.7, rationale: 'Ajuste de gastos para sostener guerra', target: null };
         } else if (!inWar && econLow) {
           decision = { action: 'AdjustSpending', amount: 100, confidence: 0.8, rationale: 'Tesorería baja; recortes administrativos', target: null };
@@ -62,6 +69,15 @@ export async function runDecisionSystem(prisma: any, llm: any, tick: number, con
           decision = { action: 'RecruitUnits', amount: recruitAmt, confidence: 0.75, rationale: 'Incrementar fuerza ante vecinos hostiles', target: null };
         } else {
           decision = { action: 'AdjustSpending', amount: 0, confidence: 0.5, rationale: 'Sin acción estratégica necesaria', target: null };
+        }
+      }
+
+      // Apply diplomatic action: Ceasefire
+      if (decision.action === 'ProposeCeasefire') {
+        for (const c of conflictsForState) {
+          // For initial implementation, accept unilaterally; can add opponent acceptance later
+          await prisma.conflict.update({ where: { id: c.id }, data: { status: 'CEASEFIRE', lastCombatTick: tick } });
+          await prisma.narrativeEvent.create({ data: { tick, stateId: st.id, text: `Se propone y acepta cese al fuego en conflicto ${c.id}.` } });
         }
       }
 
